@@ -9,3 +9,5 @@ Don't forget! Requires Fusion Jokers mod. (https://github.com/wingedcatgirl/Fusi
 * When this mod is present it overrides Fusion Jokers' per-card button for ALL fusions.
 
 Without it, Fusion Jokers keeps its original per-card button.
+
+etc. in comming soon..?
