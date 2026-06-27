@@ -1,0 +1,6 @@
+A fusion UI library for the "Fusion Jokers" engine.
+--   * Replaces the per-Joker FUSE button with ONE button above the deck.
+--   * Highlight 2+ Jokers (works for 2-, 3-, 4-, 5-component recipes), then fuse.
+--   * Shows the names of the highlighted Jokers above the button.
+-- When this mod is present it overrides Fusion Jokers' per-card button for
+-- ALL fusions. Without it, Fusion Jokers keeps its original per-card button.
