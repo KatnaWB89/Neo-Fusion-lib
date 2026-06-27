@@ -1,6 +1,8 @@
 # Redesign UI Fusion Mod
 A fusion UI library for the "Fusion Jokers" engine. by Katna & Lemoncello!
 
+Don't forget! Requires Fusion Jokers mod. (https://github.com/wingedcatgirl/Fusion-Jokers)
+
 * Replaces the per-Joker FUSE button with ONE button above the deck.
 * Highlight 2+ Jokers (works for 2-, 3-, 4-, 5-component recipes), then fuse.
 * Shows the names of the highlighted Jokers above the button.
