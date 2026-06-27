@@ -1,4 +1,4 @@
-# Katna & Lemoncello collection in UI Fusion
+# Katna & Lemoncello collection in Redesign UI Fusion
 A fusion UI library for the "Fusion Jokers" engine.
 
 * Replaces the per-Joker FUSE button with ONE button above the deck.
