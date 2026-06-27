@@ -10,6 +10,7 @@ Don't forget! Requires Fusion Jokers mod. (https://github.com/wingedcatgirl/Fusi
 
 WIP-LIST
 * compatability with Tsunami mod (https://github.com/Maratby/Tsunami)
+
 Without it, Fusion Jokers keeps its original per-card button.
 
 etc. in comming soon..?
