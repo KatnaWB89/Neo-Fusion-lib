@@ -3,13 +3,13 @@
 	"name": "NeoCore Fusion",
 	"display_name": "NeoCore Fusion",
 	"author": ["Katna", "Lemon"],
-	"description": "Fusion UI library: highlight 2+ Jokers, then fuse from one button above the deck. Shows the selected Jokers and powers KM Fusion Jokers. Requires Fusion Jokers.",
+	"description": "Fusion UI library: highlight 2+ Jokers, then fuse from one button above the deck. Shows the selected Jokers and powers KM Fusion Jokers. Compatible with Tsunami. Requires Fusion Jokers.",
 	"prefix": "ncf",
 	"main_file": "NeoCoreFusion.lua",
 	"priority": -9000,
 	"badge_colour": "3B9C9C",
 	"badge_text_colour": "FFFFFF",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"dependencies": [
 		"Steamodded (>=1.0.0~BETA-0827a)",
 		"FusionJokers"
