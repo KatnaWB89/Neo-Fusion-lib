@@ -41,7 +41,7 @@ A UI library for the "Fusion Jokers" engine. by Katna & Lemoncello!
   Fusion Jokers + NeoCore Fusion + Tsunami.
 
 ## Recipe Book (TFT-style)
-A small round **F+** button in the top-right corner (during a run) opens the fusion recipe book:
+A small round book icon button in the right of fuse button (during a run) opens the fusion recipe book:
 * Lists **every** recipe registered in the Fusion Jokers engine — from any installed mod
   (KM Fusion Jokers, Tsunami, base Fusion Jokers, ...).
 * Each recipe shows 0.5x joker art: `A + B = Result`, with the result name and fusion cost.
@@ -49,6 +49,7 @@ A small round **F+** button in the top-right corner (during a run) opens the fus
   a ready-to-fuse recipe row glows gold (like TFT item recipes).
 * Hover a recipe's **name** to preview the result joker's full card art.
 * In-game, hovering the selected-Jokers label above the FUSE button also previews the result.
+* Press **Q** hotkey to open/closes the book
 
 ## Changelog
 * **0.3.0** — Recipe book: button moved next to the FUSE button, **Q** hotkey opens/closes the
