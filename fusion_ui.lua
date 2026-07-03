@@ -13,7 +13,9 @@
 NeoCoreFusion = NeoCoreFusion or {}
 
 -- Tunables ---------------------------------------------------------------
-NeoCoreFusion.BUTTON_Y_OFFSET = -2     -- vertical gap above the deck (negative = up)
+NeoCoreFusion.BUTTON_Y_OFFSET = -2.6    -- vertical gap above the deck (negative = up)
+NeoCoreFusion.LABEL_Y_OFFSET  = -0.55   -- gap between the label pill and the button
+NeoCoreFusion.LABEL_MAX_W     = 3.6     -- label text shrinks to fit this width
 NeoCoreFusion.fuse_cost_label = ""      -- live "$6" text on the button (read by the UI)
 NeoCoreFusion.selected_label  = ""      -- live "Runner + Shortcut" text above the button
 NeoCoreFusion.PILL = { 0, 0, 0, 0.55 }  -- background behind the selected-Jokers label
@@ -132,13 +134,10 @@ G.FUNCS.ncf_fuse_highlighted = function(e)
 end
 
 -- Button definition ------------------------------------------------------
+-- The button and the selected-names label live in SEPARATE UIBoxes so a
+-- long label can never stretch the FUSE button.
 local function ncf_fuse_button_def()
     return {n = G.UIT.ROOT, config = {align = 'cm', colour = G.C.CLEAR, padding = 0.05, r = 0.1}, nodes = {
-        -- selected-Jokers label (above the button)
-        {n = G.UIT.R, config = {id = 'ncf_label_row', align = 'cm', r = 0.08, padding = 0.05, minh = 0.35, colour = G.C.CLEAR}, nodes = {
-            {n = G.UIT.T, config = {ref_table = NeoCoreFusion, ref_value = 'selected_label', scale = 0.32, colour = G.C.UI.TEXT_LIGHT, shadow = true}},
-        }},
-        -- the FUSE button
         {n = G.UIT.R, config = {
             id = 'ncf_fuse_btn', align = 'cm', minw = 1.7, minh = 0.85, r = 0.2, padding = 0.08,
             hover = true, shadow = true,
@@ -150,6 +149,15 @@ local function ncf_fuse_button_def()
             {n = G.UIT.R, config = {align = 'cm'}, nodes = {
                 {n = G.UIT.T, config = {ref_table = NeoCoreFusion, ref_value = 'fuse_cost_label', colour = G.C.WHITE, scale = 0.42, shadow = true}},
             }},
+        }},
+    }}
+end
+
+local function ncf_label_def()
+    return {n = G.UIT.ROOT, config = {align = 'cm', colour = G.C.CLEAR, padding = 0.03}, nodes = {
+        {n = G.UIT.R, config = {id = 'ncf_label_row', align = 'cm', r = 0.08, padding = 0.05, minh = 0.35, colour = G.C.CLEAR, collideable = true}, nodes = {
+            {n = G.UIT.T, config = {ref_table = NeoCoreFusion, ref_value = 'selected_label', scale = 0.32,
+                maxw = NeoCoreFusion.LABEL_MAX_W, colour = G.C.UI.TEXT_LIGHT, shadow = true}},
         }},
     }}
 end
@@ -166,8 +174,18 @@ function NeoCoreFusion.create_fuse_button()
             bond   = 'Weak',
         }
     }
+    -- label floats above the button in its own box (never resizes the button)
+    G.ncf_fuse_label = UIBox{
+        definition = ncf_label_def(),
+        config = {
+            align  = 'tm',
+            offset = { x = 0, y = NeoCoreFusion.LABEL_Y_OFFSET },
+            major  = G.ncf_fuse_button,
+            bond   = 'Weak',
+        }
+    }
     NeoCoreFusion.fuse_btn_uie  = G.ncf_fuse_button:get_UIE_by_ID('ncf_fuse_btn')
-    NeoCoreFusion.label_row_uie = G.ncf_fuse_button:get_UIE_by_ID('ncf_label_row')
+    NeoCoreFusion.label_row_uie = G.ncf_fuse_label:get_UIE_by_ID('ncf_label_row')
 end
 
 function NeoCoreFusion.remove_fuse_button()
@@ -175,8 +193,14 @@ function NeoCoreFusion.remove_fuse_button()
         G.ncf_fuse_button:remove()
         G.ncf_fuse_button = nil
     end
+    if G.ncf_fuse_label then
+        G.ncf_fuse_label:remove()
+        G.ncf_fuse_label = nil
+    end
     NeoCoreFusion.fuse_btn_uie  = nil
     NeoCoreFusion.label_row_uie = nil
+    -- re-arm the preview change-detection for the next label UIElement
+    NeoCoreFusion.preview_key = nil
 end
 
 -- Per-frame: colour gold/grey, enable/disable click, cost text, selected names.
@@ -209,6 +233,35 @@ function NeoCoreFusion.update_fuse_button()
         btn.config.colour = G.C.UI.BACKGROUND_INACTIVE
         btn.config.button = nil
         NeoCoreFusion.fuse_cost_label = info.recipe and (localize('$') .. tostring(info.cost)) or ""
+    end
+
+    -- Hovering the selected-names label previews the fusion RESULT card art.
+    -- (result_popup_def lives in recipe_book.lua; rebuilt only when it changes)
+    if lr and lr.config then
+        local rk = info.recipe and info.recipe.result_joker or nil
+        if rk ~= NeoCoreFusion.preview_key then
+            NeoCoreFusion.preview_key = rk
+            if lr.children and lr.children.h_popup then
+                lr.children.h_popup:remove()
+                lr.children.h_popup = nil
+            end
+            -- release the previous preview Sprite if its popup was never opened
+            -- (adopted sprites are removed with their popup UIBox; orphans have
+            -- no parent and must be removed by hand or they pile up in G.I.SPRITE)
+            local old_def = lr.config.h_popup
+            local old_sp = old_def and old_def.nodes and old_def.nodes[1]
+                and old_def.nodes[1].nodes and old_def.nodes[1].nodes[1]
+                and old_def.nodes[1].nodes[1].config.object
+            if old_sp and not old_sp.parent and not old_sp.REMOVED then old_sp:remove() end
+            -- the label row is collideable at build time, so hover just works
+            -- whenever h_popup is set (Node:hover no-ops while it is nil)
+            if rk and G.P_CENTERS[rk] and NeoCoreFusion.result_popup_def then
+                lr.config.h_popup = NeoCoreFusion.result_popup_def(rk)
+                lr.config.h_popup_config = { align = 'tm', offset = { x = 0, y = -0.15 }, parent = lr }
+            else
+                lr.config.h_popup = nil
+            end
+        end
     end
 end
 
