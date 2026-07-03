@@ -3,6 +3,28 @@ A UI library for the "Fusion Jokers" engine. by Katna & Lemoncello!
 
 > **Requires Fusion Jokers** — https://github.com/wingedcatgirl/Fusion-Jokers
 
+## Requirements (install these first, in this order)
+1. **Lovely Injector** — https://github.com/ethangreen-dev/lovely-injector
+2. **Steamodded (SMODS) 1.0.0 beta or newer** — https://github.com/Steamodded/smods
+3. **Fusion Jokers** (the fusion engine) — https://github.com/wingedcatgirl/Fusion-Jokers
+
+## Installation
+1. Click **Code → Download ZIP** on this page (or `git clone`).
+2. Extract the folder into your Balatro Mods directory:
+   - **Windows:** `%AppData%\Balatro\Mods\`
+   - so that the file sits at `...\Balatro\Mods\NeoCoreFusion\NeoCoreFusion.json`
+   - (if the extracted folder is named `Neo-Fusion-lib-main`, rename it to `NeoCoreFusion`)
+3. Restart Balatro. Check the **Mods** menu — you should see **NeoCore Fusion** with no red border.
+4. In a run: highlight 2+ Jokers → the **FUSE** button above the deck turns gold when they match a
+   recipe. Press **Q** (or the book button next to FUSE) for the recipe book.
+
+## วิธีติดตั้ง (ภาษาไทย)
+1. ติดตั้งตามลำดับ: **Lovely Injector → Steamodded (1.0 beta ขึ้นไป) → Fusion Jokers** (ลิงก์ด้านบน)
+2. กด **Code → Download ZIP** แล้วแตกไฟล์ลง `%AppData%\Balatro\Mods\`
+   ให้ได้ตำแหน่ง `Mods\NeoCoreFusion\NeoCoreFusion.json` (ถ้าโฟลเดอร์ชื่อ `Neo-Fusion-lib-main` ให้เปลี่ยนชื่อเป็น `NeoCoreFusion`)
+3. เปิดเกมใหม่ → เช็คเมนู **Mods** เห็น NeoCore Fusion ไม่มีกรอบแดง
+4. ในเกม: เลือก joker 2 ใบขึ้นไป → ปุ่ม **FUSE** เหนือเด็คเป็นสีทองเมื่อตรงสูตร / กด **Q** เปิดสมุดสูตร
+
 ## Features
 * Replaces the original per-joker FUSE button with **ONE button above the deck**.
 * Highlight **2+ Jokers** (works for 2-, 3-, 4-, 5-component recipes), then fuse.
