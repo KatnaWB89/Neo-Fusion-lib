@@ -261,6 +261,13 @@ function NeoCoreFusion.update_fuse_button()
             else
                 lr.config.h_popup = nil
             end
+        elseif rk and lr.config.h_popup and not lr.states.hover.is
+            and NeoCoreFusion.def_poisoned and NeoCoreFusion.def_poisoned(lr.config.h_popup)
+            and NeoCoreFusion.result_popup_def then
+            -- closing the preview destroys its sprite INSIDE our stored def
+            -- (UIElement:remove nils config.object), so re-arm it for the
+            -- next hover with a fresh sprite
+            lr.config.h_popup = NeoCoreFusion.result_popup_def(rk)
         end
     end
 end

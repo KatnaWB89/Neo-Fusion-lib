@@ -22,7 +22,25 @@ RB.GREY = { 0.45, 0.45, 0.5, 1 }            -- tint for missing (unowned) jokers
 
 -- Sprite helpers ----------------------------------------------------------
 
+-- Registry of every sprite created for book art / hover previews. Sprites
+-- adopted into a UIBox are destroyed by the engine when that box closes;
+-- the rest are orphans we must release ourselves (RB.sweep_sprites).
+RB._spr = RB._spr or {}
+local function track(s)
+    RB._spr[#RB._spr + 1] = s
+    return s
+end
+
+function RB.sweep_sprites()
+    for _, s in ipairs(RB._spr) do
+        if s and s.remove and not s.REMOVED then s:remove() end
+    end
+    RB._spr = {}
+end
+
 -- Card-art sprite for a center key. grey = render dimmed but recognisable.
+-- Legendary jokers are TWO assets: the card art plus a floating "soul" face
+-- (center.soul_pos); we overlay the face so e.g. Canio is actually visible.
 local function center_sprite(key, scale, grey)
     local center = G.P_CENTERS[key]
     if not center then return nil end
@@ -30,13 +48,35 @@ local function center_sprite(key, scale, grey)
         or (center.set and G.ASSET_ATLAS[center.set])
         or G.ASSET_ATLAS['Joker']
     if not atlas then return nil end
-    local s = Sprite(0, 0, scale * G.CARD_W, scale * G.CARD_H, atlas, center.pos or { x = 0, y = 0 })
+    local s = track(Sprite(0, 0, scale * G.CARD_W, scale * G.CARD_H, atlas, center.pos or { x = 0, y = 0 }))
     s.states.drag.can = false
     s.states.collide.can = false
-    if grey then
-        -- draw_self accepts an overlay colour: multiply toward grey keeps the
-        -- art readable while clearly marking it as not owned yet
-        s.draw = function(sp) Sprite.draw_self(sp, RB.GREY) end
+    if center.soul_pos then
+        local soul = track(Sprite(0, 0, scale * G.CARD_W, scale * G.CARD_H, atlas, center.soul_pos))
+        soul.states.drag.can = false
+        soul.states.collide.can = false
+        s.ncf_soul = soul
+        local base_remove = s.remove
+        s.remove = function(sp)
+            if sp.ncf_soul and not sp.ncf_soul.REMOVED then sp.ncf_soul:remove() end
+            base_remove(sp)
+        end
+    end
+    -- draw_self accepts an overlay colour: multiply toward grey keeps the
+    -- art readable while clearly marking it as not owned yet
+    local overlay = grey and RB.GREY or nil
+    if overlay or s.ncf_soul then
+        s.draw = function(sp)
+            Sprite.draw_self(sp, overlay)
+            local so = sp.ncf_soul
+            if so and not so.REMOVED then
+                -- pin the face onto the card art (same transform), then draw
+                so.T.x, so.T.y, so.T.w, so.T.h = sp.T.x, sp.T.y, sp.T.w, sp.T.h
+                so.VT.x, so.VT.y, so.VT.w, so.VT.h = sp.VT.x, sp.VT.y, sp.VT.w, sp.VT.h
+                so.VT.scale, so.VT.r = sp.VT.scale, sp.VT.r
+                Sprite.draw_self(so, overlay)
+            end
+        end
     end
     return s
 end
@@ -53,37 +93,157 @@ local function result_popup_def(key)
 end
 NeoCoreFusion.result_popup_def = result_popup_def
 
--- Full ability tooltip for a center key, exactly like hovering a real card:
--- a hidden throwaway Card renders the standard card_h_popup (name, description
--- with live values, rarity badge). Cards are cached per key and cleaned up
--- when the book button is removed (stage exit).
-RB._tt = RB._tt or {}
+-- Deep copy so a definition we embed owns its own node tables (never shared
+-- with the throwaway card, which regenerates its ability table each call).
+-- Memoized per call: safe on shared tables and reference cycles.
+local function deep_copy(t, seen)
+    if type(t) ~= 'table' then return t end
+    seen = seen or {}
+    if seen[t] then return seen[t] end
+    local c = {}
+    seen[t] = c
+    for k, v in pairs(t) do c[k] = deep_copy(v, seen) end
+    return c
+end
+
+-- Make description nodes stateless. localize() emits {E:}/animated parts as
+-- G.UIT.O nodes holding live DynaText objects — stateful (destroyed when a
+-- popup closes) and unsafe to reuse, so convert each one to a plain text node
+-- carrying the same string (or an inert spacer when there is no string).
+-- NOTE: localize() emits each description LINE as a BARE ARRAY of part-nodes
+-- (no n/config keys) — recurse into those too, or O parts hide inside them.
+local function strip_objects(node)
+    if type(node) ~= 'table' then return node end
+    if node.n == nil and node.config == nil then
+        for _, child in ipairs(node) do strip_objects(child) end
+        return node
+    end
+    if node.n == G.UIT.O then
+        local obj = node.config and node.config.object
+        local txt, col, scl
+        if obj then
+            local s = obj.string
+            if type(s) == 'table' and s.ref_table and s.ref_value ~= nil then
+                s = s.ref_table[s.ref_value]
+            end
+            if type(s) == 'string' or type(s) == 'number' then txt = tostring(s) end
+            col = obj.colours and obj.colours[1] or nil
+            scl = type(obj.scale) == 'number' and obj.scale or nil
+        end
+        if txt then
+            node.n = G.UIT.T
+            node.config = { text = txt, colour = col or G.C.UI.TEXT_DARK, scale = scl or 0.32 }
+        else
+            node.n = G.UIT.B
+            node.config = { w = 0.0001, h = 0.0001 }
+        end
+        node.nodes = nil
+        return node
+    end
+    if type(node.nodes) == 'table' then
+        for _, child in ipairs(node.nodes) do strip_objects(child) end
+    end
+    return node
+end
+
+-- Does a stored popup definition contain a dead object node? Closing a hover
+-- popup runs UIElement:remove, which destroys config.object and nils it INSIDE
+-- the config table — which the definition shares by reference. Rebuilding a
+-- UIBox from such a poisoned definition crashes set_values/draw, so reused
+-- defs must be checked (and rebuilt) before the next hover.
+local function def_poisoned(node)
+    if type(node) ~= 'table' then return false end
+    if node.n == G.UIT.O then
+        local o = node.config and node.config.object
+        if not o or o.REMOVED then return true end
+    end
+    if type(node.nodes) == 'table' then
+        for _, child in ipairs(node.nodes) do
+            if def_poisoned(child) then return true end
+        end
+    end
+    return false
+end
+RB.def_poisoned = def_poisoned
+NeoCoreFusion.def_poisoned = def_poisoned
+
+-- Ability tooltip for a center key: the localized joker name (as a plain text
+-- node, NOT a DynaText) plus the description rows (colour + value substituted).
+-- Everything is stateless text — no card_h_popup, no consumable objects — so it
+-- cannot leave an object-less O node behind to crash the engine on re-hover.
 function RB.ability_popup(key)
     local center = G.P_CENTERS[key]
     if not center then return nil end
-    local c = RB._tt[key]
-    if not c or c.REMOVED then
-        c = Card(0, 0, G.CARD_W, G.CARD_H, nil, center)
-        c.states.visible = false
-        c.no_shadow = true
-        RB._tt[key] = c
-    end
-    c.ability_UIBox_table = c:generate_UIBox_ability_table()
-    return G.UIDEF.card_h_popup(c)
-end
 
-function RB.clear_tooltip_cards()
-    for _, c in pairs(RB._tt) do
-        if c and c.remove and not c.REMOVED then c:remove() end
+    local name = localize{ type = 'name_text', key = key, set = 'Joker' }
+    if type(name) ~= 'string' or name == '' or name == 'ERROR' then
+        name = (center and center.key) or key
     end
-    RB._tt = {}
+
+    -- Description rows via generate_UIBox_ability_table (guarded): a throwaway
+    -- Card is created OFF-SCREEN, used for one call, then removed on the spot.
+    -- (Never cache these cards — an invisible Card left alive still collides,
+    -- so pointing at "empty" table space would hover it and crash the game.)
+    local main_rows
+    pcall(function()
+        local c = Card(G.ROOM.T.w + 30, G.ROOM.T.h + 30, G.CARD_W, G.CARD_H, nil, center)
+        c.states.visible = false
+        c.states.collide.can = false
+        c.states.hover.can = false
+        c.no_shadow = true
+        local t = c:generate_UIBox_ability_table()
+        if type(t) == 'table' and type(t.main) == 'table' then
+            -- Each entry of t.main is a BARE ARRAY of part-nodes (that is how
+            -- localize() emits lines — the game wraps them in desc_from_rows
+            -- before use). A bare array has no UIT, so set_values never gives
+            -- it a colour and drawing it crashes ui.lua ("index field
+            -- 'colour'"). Wrap every line in a proper R row, exactly like
+            -- desc_from_rows. Strip stateful objects first, then deep-copy so
+            -- the def owns its tables outright.
+            main_rows = {}
+            for _, line in ipairs(t.main) do
+                strip_objects(line)
+                local parts = (line.n ~= nil or line.config ~= nil) and { line } or line
+                main_rows[#main_rows + 1] = {n = G.UIT.R, config = { align = 'cm' }, nodes = parts}
+            end
+            main_rows = deep_copy(main_rows)
+            if #main_rows == 0 then main_rows = nil end
+        end
+        c:remove()
+    end)
+
+    local col = {
+        {n = G.UIT.R, config = { align = 'cm', padding = 0.02 }, nodes = {
+            {n = G.UIT.T, config = { text = name, scale = 0.42, colour = G.C.UI.TEXT_LIGHT, shadow = true }},
+        }},
+    }
+    if main_rows then
+        -- same white rounded panel the game uses for card descriptions
+        -- (desc_from_rows): localize's text colours assume this background
+        col[#col + 1] = {n = G.UIT.R, config = { align = 'cm', padding = 0.05, r = 0.1,
+            colour = G.C.UI.BACKGROUND_WHITE, minw = 2 }, nodes = {
+            {n = G.UIT.C, config = { align = 'cm', padding = 0.03 }, nodes = main_rows },
+        }}
+    end
+
+    return {n = G.UIT.ROOT, config = { align = 'cm', colour = G.C.CLEAR, padding = 0.05 }, nodes = {
+        {n = G.UIT.R, config = { align = 'cm', r = 0.1, colour = { 0, 0, 0, 0.85 }, padding = 0.1, shadow = true }, nodes = {
+            {n = G.UIT.C, config = { align = 'cm' }, nodes = col },
+        }},
+    }}
 end
 
 -- Attach the hover popup to its own UIElement (parent isn't known until the
--- element exists, so a tiny per-frame func fills it in once).
+-- element exists, so a tiny per-frame func fills it in once). Also HEALS the
+-- result-art preview: the engine destroys the preview sprite inside our stored
+-- def when the popup closes, so rebuild the def before the next hover.
 G.FUNCS.ncf_rb_attach_popup = function(e)
     if e.config.h_popup_config and not e.config.h_popup_config.parent then
         e.config.h_popup_config.parent = e
+    end
+    if e.config.ncf_result_key and not e.states.hover.is
+       and (not e.config.h_popup or def_poisoned(e.config.h_popup)) then
+        e.config.h_popup = result_popup_def(e.config.ncf_result_key)
     end
 end
 
@@ -172,6 +332,7 @@ local function recipe_row(entry)
         {n = G.UIT.R, config = {
             align = 'cl', padding = 0.03, collideable = true,
             func = 'ncf_rb_attach_popup', insta_func = true,
+            ncf_result_key = f.result_joker,
             h_popup = result_popup_def(f.result_joker),
             h_popup_config = { align = 'cl', offset = { x = -0.15, y = 0 } },
         }, nodes = {
@@ -198,6 +359,7 @@ G.FUNCS.ncf_rb_page = function(args)
 end
 
 G.FUNCS.ncf_open_recipe_book = function(e)
+    RB.sweep_sprites()   -- release art/preview sprites from the previous build
     local list = RB.collect()
     local pages = math.max(1, math.ceil(#list / RB.PER_PAGE))
     if RB.page > pages then RB.page = 1 end
@@ -270,7 +432,7 @@ function RB.remove_button()
         G.ncf_recipe_btn = nil
     end
     RB.anchor = nil
-    RB.clear_tooltip_cards()
+    RB.sweep_sprites()
 end
 
 -- Lifecycle: exists while the FUSE button exists (play + shop, gone in menus).
@@ -290,20 +452,31 @@ if not RB.game_update_patched then
     end
 end
 
--- Q hotkey: open/close the recipe book during a run.
+-- Hotkeys: Q opens/closes the recipe book during a run;
+-- LEFT / RIGHT arrows flip its pages while it is open (wraps around).
 if not RB.key_hook_patched then
     RB.key_hook_patched = true
     local key_press_ref = Controller.key_press_update
     function Controller:key_press_update(key, dt)
         key_press_ref(self, key, dt)
-        if key == 'q' and G.STAGE == G.STAGES.RUN
-           and not self.locks.frame and not self.text_input_hook then
+        if G.STAGE ~= G.STAGES.RUN or self.locks.frame or self.text_input_hook then return end
+
+        if key == 'q' then
             if G.OVERLAY_MENU then
                 if RB.book_open then
                     RB.book_open = false
                     G.FUNCS.exit_overlay_menu()
                 end
             else
+                G.FUNCS.ncf_open_recipe_book()
+            end
+        elseif (key == 'left' or key == 'right') and RB.book_open and G.OVERLAY_MENU then
+            local pages = math.max(1, math.ceil(#RB.collect() / RB.PER_PAGE))
+            if pages > 1 then
+                RB.page = RB.page + (key == 'right' and 1 or -1)
+                if RB.page > pages then RB.page = 1 end
+                if RB.page < 1 then RB.page = pages end
+                G.FUNCS.exit_overlay_menu()
                 G.FUNCS.ncf_open_recipe_book()
             end
         end

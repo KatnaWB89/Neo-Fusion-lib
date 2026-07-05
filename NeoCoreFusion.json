@@ -9,7 +9,7 @@
 	"priority": -9000,
 	"badge_colour": "3B9C9C",
 	"badge_text_colour": "FFFFFF",
-	"version": "0.3.0",
+	"version": "0.3.4",
 	"dependencies": [
 		"Steamodded (>=1.0.0~BETA-0827a)",
 		"FusionJokers"

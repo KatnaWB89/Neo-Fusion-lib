@@ -48,10 +48,32 @@ A small round book icon button in the right of fuse button (during a run) opens 
 * Components you **own glow normally**; missing components render as **dark silhouettes** —
   a ready-to-fuse recipe row glows gold (like TFT item recipes).
 * Hover a recipe's **name** to preview the result joker's full card art.
+* **LEFT / RIGHT arrow keys** flip pages while the book is open (wraps around).
 * In-game, hovering the selected-Jokers label above the FUSE button also previews the result.
 * Press **Q** hotkey to open/closes the book
 
 ## Changelog
+* **0.3.4** — Recipe book: **LEFT / RIGHT arrow keys** flip pages while the book is open
+  (wraps around from the last page back to the first).
+* **0.3.3** — THE actual fix for the ability-tooltip crash (`ui.lua:729 'colour'`). Confirmed in
+  the game source: `localize()` emits each description line as a **bare array** of parts (no node
+  type), which the game always wraps via `desc_from_rows` before display — the recipe book was
+  embedding the raw arrays, so the UI drew a node that never got a default colour. Lines are now
+  wrapped in proper rows exactly like the game does; animated `{E:}` text parts are converted to
+  plain text (same string/colour), and the description panel uses the game's white background.
+* **0.3.2** — Fixed the remaining hover crashes for good (`ui.lua: attempt to index field
+  'object'` / `'colour'`). Root cause found in the engine source: closing any hover popup runs
+  `UIElement:remove`, which destroys the popup's sprite **inside the shared definition table**,
+  so re-hovering the recipe name or the FUSE-label preview rebuilt a poisoned definition and
+  crashed. Previews now self-heal (rebuilt with a fresh sprite after every close). Also removed
+  the cached invisible tooltip cards — they could be hovered as ghosts on empty table space —
+  and **legendary jokers now show their face** in the book (card art + soul overlay, the two
+  assets legendaries are made of).
+* **0.3.1** — Fixed a crash (`ui.lua: attempt to index field 'object'`) when hovering a joker in
+  the recipe book more than once. The ability tooltip used to reuse a full card popup whose
+  stateful sprite/DynaText got consumed on the first hover, leaving an object-less node that
+  crashed the engine on the next build. The tooltip is now built from stateless text, so it is
+  safe to open any number of times.
 * **0.3.0** — Recipe book: button moved next to the FUSE button, **Q** hotkey opens/closes the
   book, unowned jokers render greyed (still recognisable) instead of black, hovering any joker
   art shows its full ability tooltip, and phantom recipes for uninstalled mods are hidden.
